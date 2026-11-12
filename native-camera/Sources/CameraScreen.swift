@@ -302,7 +302,7 @@ struct CameraScreen: View {
                        luma: readings.map(\.luma).reduce(0,+)/n, spread: readings.map(\.spread).reduce(0,+)/n,
                        clipping: readings.map(\.clipping).reduce(0,+)/n,
                        temporalVariation: readings.map(\.temporalVariation).reduce(0,+)/n,
-                       sampleCount: readings.map(\.sampleCount).reduce(0,+)/n)
+                       sampleCount: Int((readings.map { Double($0.sampleCount) }.reduce(0,+)/n).rounded()))
     }
 
     private func metric(_ title: String, _ value: Double) -> some View {
@@ -455,6 +455,7 @@ private final class CameraController: NSObject, ObservableObject {
 
     func resetSampleBuffer() {
         lock.lock(); recentSamples.removeAll(keepingCapacity: true); lock.unlock()
+        DispatchQueue.main.async { self.hasReading = false }
         setStatus("Bufor wyczyszczony — czekam na stabilny obraz")
     }
 
