@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090a0c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TV Kalibracja">
+  <meta name="description" content="Asystent kalibracji telewizora">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./styles.css">
+  <title>TV Kalibracja</title>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="eyebrow">DISPLAY LAB · BETA</div>
+      <div class="topline"><h1>TV Kalibracja</h1><span class="status-dot" aria-label="Gotowy"></span></div>
+      <p class="muted">Asystent pomiaru i ustawień obrazu</p>
+    </header>
+
+    <section class="device-card">
+      <div class="eyebrow">AKTYWNY WYŚWIETLACZ</div>
+      <h2>Samsung UE55TU7002KXXH</h2>
+      <p class="muted">55″ · UHD 4K · docelowo PS5 / Game Mode</p>
+      <div class="tag-row"><span>SDR</span><span>HDR10</span><span>Gaming</span></div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading"><div><div class="eyebrow">KALIBRACJA</div><h2>Rozpocznij sesję</h2></div></div>
+      <button class="primary" id="start-session">Nowa kalibracja <span aria-hidden="true">→</span></button>
+      <p class="hint" id="session-status">Najpierw przygotujemy ekran i połączenie z planszami testowymi.</p>
+    </section>
+
+    <section class="section">
+      <div class="section-heading"><div><div class="eyebrow">NARZĘDZIA</div><h2>Stan urządzeń</h2></div></div>
+      <div class="info-row"><span>Telefon</span><strong id="camera-status">Kamera nieuruchomiona</strong></div>
+      <div class="info-row"><span>Plansze TV</span><a href="./pattern.html" target="_blank" rel="noopener">Otwórz odtwarzacz</a></div>
+      <div class="info-row"><span>Tryb pracy</span><strong>Asystowany</strong></div>
+    </section>
+
+    <footer class="footer">Wyniki z kamery będą oznaczane jako szacunkowe. Bez kolorymetru nie deklarujemy laboratoryjnej dokładności.</footer>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
