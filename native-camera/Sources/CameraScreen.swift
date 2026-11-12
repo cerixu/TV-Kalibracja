@@ -33,9 +33,10 @@ private struct Reading: Identifiable {
     let blue: Double
     let luma: Double
     let spread: Double
+    let clipping: Double
     var csv: String {
-        String(format: "%@,%@,%.4f,%.4f,%.4f,%.4f,%.4f",
-               ISO8601DateFormatter().string(from: date), pattern, red, green, blue, luma, spread)
+        String(format: "%@,%@,%.4f,%.4f,%.4f,%.5f,%.5f,%.5f",
+               ISO8601DateFormatter().string(from: date), pattern, red, green, blue, luma, spread, clipping)
     }
 }
 
@@ -146,7 +147,7 @@ struct CameraScreen: View {
                     }
                     Button {
                         camera.captureMeasurement { sample in
-                            readings.insert(Reading(date: Date(), pattern: selectedPattern.rawValue, red: sample.r, green: sample.g, blue: sample.b, luma: sample.luma, spread: sample.spread), at: 0)
+                            readings.insert(Reading(date: Date(), pattern: selectedPattern.rawValue, red: sample.r, green: sample.g, blue: sample.b, luma: sample.luma, spread: sample.spread, clipping: sample.clipping), at: 0)
                             activeTab = 2
                         }
                     } label: {
@@ -177,6 +178,7 @@ struct CameraScreen: View {
                             resultTile("POMIARY", "\(readings.count)")
                             resultTile("ŚREDNIA Y", String(format: "%.3f", avg.luma))
                             resultTile("ROZPIĘTOŚĆ", String(format: "%.3f", avg.spread))
+                            resultTile("CLIPPING", String(format: "%.1f%%", avg.clipping * 100))
                         }
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Ostatnie odczyty").font(.headline)
@@ -187,7 +189,7 @@ struct CameraScreen: View {
                                         Text(r.date.formatted(date: .omitted, time: .standard)).font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(String(format: "R %.2f  G %.2f  B %.2f", r.red, r.green, r.blue))
+                                    Text(String(format: "R %.2f  G %.2f  B %.2f  ·  clip %.1f%%", r.red, r.green, r.blue, r.clipping * 100))
                                         .font(.system(.caption2, design: .monospaced))
                                 }.padding(10).background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                             }
@@ -269,7 +271,8 @@ struct CameraScreen: View {
                 metric("R", camera.live.r)
                 metric("G", camera.live.g)
                 metric("B", camera.live.b)
-                metric("Y", camera.live.luma)
+                metric("Y linear", camera.live.luma)
+                metric("Clip", camera.live.clipping * 100)
             }
             HStack {
                 Text("Rozrzut w obszarze")
@@ -290,7 +293,8 @@ struct CameraScreen: View {
         let n = Double(readings.count)
         return Reading(date: Date(), pattern: "Średnia", red: readings.map(\.red).reduce(0,+)/n,
                        green: readings.map(\.green).reduce(0,+)/n, blue: readings.map(\.blue).reduce(0,+)/n,
-                       luma: readings.map(\.luma).reduce(0,+)/n, spread: readings.map(\.spread).reduce(0,+)/n)
+                       luma: readings.map(\.luma).reduce(0,+)/n, spread: readings.map(\.spread).reduce(0,+)/n,
+                       clipping: readings.map(\.clipping).reduce(0,+)/n)
     }
 
     private func metric(_ title: String, _ value: Double) -> some View {
@@ -326,7 +330,7 @@ struct CameraScreen: View {
     }
 
     private func exportReadings() {
-        let header = "timestamp,pattern,red,green,blue,luma,spread"
+        let header = "timestamp,pattern,red,green,blue,linear_luma,luma_stddev,clipped_pixel_fraction"
         let csv = ([header] + readings.reversed().map(\.csv)).joined(separator: "\n")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("tv-calibrator-session.csv")
         do {
@@ -340,6 +344,8 @@ struct CameraScreen: View {
 private final class CameraController: NSObject, ObservableObject {
     struct Sample {
         var r = 0.0; var g = 0.0; var b = 0.0; var luma = 0.0; var spread = 0.0
+        var clipping = 0.0
+        var pixelCount = 0.0
     }
     let session = AVCaptureSession()
     @Published var status = "Oczekiwanie na kamerę"
@@ -352,6 +358,7 @@ private final class CameraController: NSObject, ObservableObject {
     private let output = AVCaptureVideoDataOutput()
     private let lock = NSLock()
     private var latest = Sample()
+    private var recentSamples: [Sample] = []
     private var frameCounter = 0
 
     func start() async {
@@ -437,12 +444,29 @@ private final class CameraController: NSObject, ObservableObject {
     }
 
     func captureMeasurement(completion: @escaping (Sample) -> Void) {
-        lock.lock(); let sample = latest; lock.unlock()
-        DispatchQueue.main.async { completion(sample) }
+        lock.lock()
+        let samples = Array(recentSamples.suffix(5))
+        let fallback = latest
+        lock.unlock()
+        guard !samples.isEmpty else { DispatchQueue.main.async { completion(fallback) }; return }
+        func median(_ values: [Double]) -> Double {
+            let sorted = values.sorted()
+            return sorted[sorted.count / 2]
+        }
+        let result = Sample(
+            r: median(samples.map(\.r)), g: median(samples.map(\.g)), b: median(samples.map(\.b)),
+            luma: median(samples.map(\.luma)), spread: median(samples.map(\.spread)),
+            clipping: median(samples.map(\.clipping)), pixelCount: median(samples.map(\.pixelCount))
+        )
+        DispatchQueue.main.async { completion(result) }
     }
 
     func accept(_ sample: Sample) {
-        lock.lock(); latest = sample; lock.unlock()
+        lock.lock()
+        latest = sample
+        recentSamples.append(sample)
+        if recentSamples.count > 12 { recentSamples.removeFirst(recentSamples.count - 12) }
+        lock.unlock()
         frameCounter += 1
         if frameCounter % 8 == 0 {
             DispatchQueue.main.async {
@@ -463,23 +487,34 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
         let bytes = base.assumingMemoryBound(to: UInt8.self)
         let x0 = width / 3, x1 = width * 2 / 3, y0 = height / 3, y1 = height * 2 / 3
-        var rs = [Double](), gs = [Double](), bs = [Double]()
-        for y in Swift.stride(from: y0, to: y1, by: 8) {
-            for x in Swift.stride(from: x0, to: x1, by: 8) {
+        var rs = [Double](), gs = [Double](), bs = [Double](), luminances = [Double]()
+        var clippedPixels = 0
+        func linearize(_ value: Double) -> Double {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        for y in Swift.stride(from: y0, to: y1, by: 6) {
+            for x in Swift.stride(from: x0, to: x1, by: 6) {
                 let i = y * rowBytes + x * 4
-                bs.append(Double(bytes[i]) / 255)
-                gs.append(Double(bytes[i+1]) / 255)
-                rs.append(Double(bytes[i+2]) / 255)
+                let b = Double(bytes[i]) / 255
+                let g = Double(bytes[i+1]) / 255
+                let r = Double(bytes[i+2]) / 255
+                rs.append(r); gs.append(g); bs.append(b)
+                if r <= 2/255 || g <= 2/255 || b <= 2/255 || r >= 253/255 || g >= 253/255 || b >= 253/255 {
+                    clippedPixels += 1
+                }
+                luminances.append(0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b))
             }
         }
         guard !rs.isEmpty else { return }
-        let r = rs.reduce(0,+) / Double(rs.count)
-        let g = gs.reduce(0,+) / Double(gs.count)
-        let b = bs.reduce(0,+) / Double(bs.count)
-        let luma = 0.2126*r + 0.7152*g + 0.0722*b
-        let values = rs + gs + bs
-        let spread = (values.max() ?? 0) - (values.min() ?? 0)
-        accept(Sample(r: r, g: g, b: b, luma: luma, spread: spread))
+        let count = Double(rs.count)
+        let r = rs.reduce(0,+) / count
+        let g = gs.reduce(0,+) / count
+        let b = bs.reduce(0,+) / count
+        let luma = luminances.reduce(0,+) / count
+        let variance = luminances.reduce(0.0) { $0 + pow($1 - luma, 2) } / count
+        let spread = sqrt(variance)
+        let clipping = Double(clippedPixels) / count
+        accept(Sample(r: r, g: g, b: b, luma: luma, spread: spread, clipping: clipping, pixelCount: count))
     }
 }
 
