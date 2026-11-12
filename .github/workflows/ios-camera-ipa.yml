@@ -1,0 +1,57 @@
+name: Build iOS Camera IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "native-camera/**"
+      - ".github/workflows/ios-camera-ipa.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: native-camera
+        run: xcodegen generate
+
+      - name: Build unsigned iOS app
+        working-directory: native-camera
+        run: |
+          xcodebuild \
+            -project TVCalibratorCamera.xcodeproj \
+            -scheme TVCalibratorCamera \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          APP_PATH="native-camera/build/DerivedData/Build/Products/Release-iphoneos/TV Calibrator.app"
+          test -d "$APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          zip -r TV-Calibrator-unsigned.ipa Payload
+          rm -rf Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TV-Calibrator-unsigned-IPA
+          path: TV-Calibrator-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
