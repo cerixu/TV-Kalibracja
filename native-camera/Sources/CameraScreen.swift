@@ -20,7 +20,9 @@ struct CameraScreen: View {
                 VStack(spacing: 16) {
                     ZStack(alignment: .bottom) {
                         CameraPreview(session: camera.session)
-                            .aspectRatio(3/4, contentMode: .fit)
+                            .frame(height: 260)
+                            .frame(maxWidth: .infinity)
+                            .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 18))
                         Text(camera.status)
                             .font(.caption.weight(.semibold))
@@ -30,7 +32,7 @@ struct CameraScreen: View {
                     }
 
                     HStack {
-                        metric("ISO", "(Int(isoValue))")
+                        metric("ISO", "\(Int(isoValue))")
                         metric("Czas", shutters.first(where: { $0.1 == shutterValue })?.0 ?? "custom")
                         metric("WB", selectedWB)
                     }
