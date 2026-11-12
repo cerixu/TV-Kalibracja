@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000"><title>TV Test Patterns</title><link rel="stylesheet" href="./styles.css"></head>
+<body class="pattern-page"><main class="pattern-screen"><canvas id="pattern" aria-label="Plansza testowa"></canvas></main>
+<nav class="pattern-controls" aria-label="Sterowanie planszami"><button data-pattern="black">Czerń</button><button data-pattern="white">Biel</button><button data-pattern="gray">Szarość</button><button data-pattern="red">Czerwony</button><button data-pattern="green">Zielony</button><button data-pattern="blue">Niebieski</button><button data-pattern="bars">Paski</button></nav>
+<script>
+const canvas=document.querySelector("#pattern"),ctx=canvas.getContext("2d",{alpha:false});
+function resize(){const dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(innerWidth*dpr);canvas.height=Math.round(innerHeight*dpr);draw(current);}
+let current="black";
+function draw(type){current=type;const w=canvas.width,h=canvas.height;ctx.fillStyle="#000";ctx.fillRect(0,0,w,h);
+const colors={black:"#000000",white:"#ffffff",gray:"#808080",red:"#ff0000",green:"#00ff00",blue:"#0000ff"};
+if(colors[type]){ctx.fillStyle=colors[type];ctx.fillRect(0,0,w,h);}
+if(type==="bars"){const bars=["#ffffff","#ffff00","#00ffff","#00ff00","#ff00ff","#ff0000","#0000ff"];bars.forEach((c,i)=>{ctx.fillStyle=c;ctx.fillRect(i*w/7,0,w/7,h);});}}
+document.querySelectorAll("[data-pattern]").forEach(button=>button.addEventListener("click",()=>draw(button.dataset.pattern)));
+addEventListener("resize",resize);addEventListener("keydown",e=>{const keys=["black","white","gray","red","green","blue","bars"];const i=keys.indexOf(current);if(e.key==="ArrowRight")draw(keys[(i+1)%keys.length]);if(e.key==="ArrowLeft")draw(keys[(i+keys.length-1)%keys.length]);});
+resize();
+</script></body></html>
