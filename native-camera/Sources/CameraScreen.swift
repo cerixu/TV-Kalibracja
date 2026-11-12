@@ -394,6 +394,8 @@ private final class CameraController: NSObject, ObservableObject {
         } catch { setStatus("Nie można skonfigurować kamery") }
         session.commitConfiguration()
         session.startRunning()
+        // Match the values shown by the controls from the first usable frame.
+        setExposure(iso: 100, duration: 1.0 / 60.0)
     }
 
     func stop() { queue.async { if self.session.isRunning { self.session.stopRunning() } } }
