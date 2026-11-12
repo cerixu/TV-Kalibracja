@@ -43,11 +43,33 @@ The first milestone is repeatability: determine whether repeated readings under 
 - Offline shell: Service Worker + Cache Storage
 - Session and measurement data: IndexedDB (no LocalStorage)
 
+## Native iPhone measurement — experimental milestone
+
+The native iOS app now samples the rear camera's central screen region using AVFoundation:
+- Manual ISO and shutter controls, plus focus and white-balance locks.
+- Five most recent camera frames are combined with a per-channel median to reduce frame noise.
+- RGB remains camera-processed and device-relative.
+- Luma is calculated after sRGB transfer-function linearization (still not a calibrated luminance measurement).
+- Reports include the fraction of sampled pixels near black/white code-value endpoints and spatial luma standard deviation.
+- CSV export includes the additional fields.
+
+### Measurement protocol
+1. Warm up the TV for at least 30 minutes and keep room lighting unchanged.
+2. Use one fixed picture mode and one fixed signal path for the whole comparison.
+3. Put the phone perpendicular to the screen; keep distance, zoom and framing fixed.
+4. Lock focus and white balance. Set manual ISO/shutter once, then do not change them within a comparison series.
+5. Capture the same neutral-gray pattern at least five times. Compare the spread of readings before trusting any relative trend.
+6. Repeat the series after a single TV setting change. Never change several controls at once.
+
+Important: the PWA pattern page opened in the Samsung TV browser tests that TV-browser path, not the PS5 HDMI input. For PS5-specific results, the test pattern must be delivered through the PS5 HDMI path. The PS5 HDR calibration screens are a separate workflow. Do not mix measurements from different sources or picture modes.
+
+This is still an experimental camera sampler, not Apple's private sensor/algorithm and not a colorimeter. The app does not have access to the iPhone ambient-light sensor's raw measurements. Camera ISP processing, spectral response, panel reflections, angle, and display processing remain sources of systematic error. Do not infer Delta E, absolute cd/m², gamma/EOTF, white point or gamut coverage from these values.
+
 ## Roadmap
 1. PWA shell and TV pattern generator — implemented.
-2. Camera preview, sampling, history and export — implemented experimentally.
-3. Repeatability protocol and test report validation — next.
-4. Measurement model with explicit confidence and limitations.
+2. Native camera sampling with manual controls and robust frame aggregation — experimental implementation.
+3. Repeatability validation on the actual iPhone and TV — pending real-device testing.
+4. Confidence scoring and pattern-specific interpretation — next.
 5. Samsung-specific guided settings for SDR Game Mode, then HDR.
 6. Optional integration with a supported colorimeter for actual colorimetric calibration.
 
