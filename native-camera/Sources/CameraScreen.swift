@@ -166,7 +166,11 @@ struct CameraScreen: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Wyniki sesji").font(.largeTitle.bold())
                     if readings.isEmpty {
-                        ContentUnavailableView("Brak pomiarów", systemImage: "chart.bar", description: Text("Przejdź do zakładki Pomiar i zapisz pierwszy odczyt."))
+                        VStack(spacing: 12) {
+                            Image(systemName: "chart.bar").font(.system(size: 42)).foregroundStyle(.secondary)
+                            Text("Brak pomiarów").font(.headline)
+                            Text("Przejdź do zakładki Pomiar i zapisz pierwszy odczyt.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        }.frame(maxWidth: .infinity).padding(.vertical, 48)
                     } else {
                         let avg = averageReading
                         HStack(spacing: 10) {
