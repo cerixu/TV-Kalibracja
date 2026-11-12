@@ -1,16 +1,23 @@
-<!doctype html>
-<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000"><title>TV Test Patterns</title><link rel="stylesheet" href="./styles.css"></head>
-<body class="pattern-page"><main class="pattern-screen"><canvas id="pattern" aria-label="Plansza testowa"></canvas></main>
-<nav class="pattern-controls" aria-label="Sterowanie planszami"><button data-pattern="black">Czerń</button><button data-pattern="white">Biel</button><button data-pattern="gray">Szarość</button><button data-pattern="red">Czerwony</button><button data-pattern="green">Zielony</button><button data-pattern="blue">Niebieski</button><button data-pattern="bars">Paski</button></nav>
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000"><title>TV Test Patterns</title><link rel="stylesheet" href="./styles.css"></head>
+<body class="pattern-page"><main class="pattern-screen"><canvas id="pattern" aria-label="Plansza testowa"></canvas><div id="pattern-label" class="pattern-label">BLACK</div></main>
+<nav class="pattern-controls" aria-label="Sterowanie planszami">
+<button data-pattern="black">Czerń</button><button data-pattern="pluge">Czerń PLUGE</button><button data-pattern="gray50">Szarość 50%</button><button data-pattern="graysteps">Skala szarości</button><button data-pattern="whiteclip">Biel / clipping</button><button data-pattern="rgb">RGB</button><button data-pattern="bars">Paski</button>
+</nav><p class="pattern-help">Wybierz wzorzec. Do pomiaru ustaw TV w trybie obrazu, który chcesz ocenić. Nie używaj zdjęć ekranu jako pomiaru absolutnego.</p>
 <script>
-const canvas=document.querySelector("#pattern"),ctx=canvas.getContext("2d",{alpha:false});
+const canvas=document.querySelector("#pattern"),ctx=canvas.getContext("2d",{alpha:false}),label=document.querySelector("#pattern-label");
+let current="black";const names={black:"BLACK",pluge:"BLACK LEVEL · PLUGE",gray50:"50% GRAY",graysteps:"GRAYSCALE STEPS",whiteclip:"WHITE CLIPPING",rgb:"RGB PRIMARY",bars:"COLOR BARS"};
 function resize(){const dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(innerWidth*dpr);canvas.height=Math.round(innerHeight*dpr);draw(current);}
-let current="black";
-function draw(type){current=type;const w=canvas.width,h=canvas.height;ctx.fillStyle="#000";ctx.fillRect(0,0,w,h);
-const colors={black:"#000000",white:"#ffffff",gray:"#808080",red:"#ff0000",green:"#00ff00",blue:"#0000ff"};
-if(colors[type]){ctx.fillStyle=colors[type];ctx.fillRect(0,0,w,h);}
-if(type==="bars"){const bars=["#ffffff","#ffff00","#00ffff","#00ff00","#ff00ff","#ff0000","#0000ff"];bars.forEach((c,i)=>{ctx.fillStyle=c;ctx.fillRect(i*w/7,0,w/7,h);});}}
-document.querySelectorAll("[data-pattern]").forEach(button=>button.addEventListener("click",()=>draw(button.dataset.pattern)));
-addEventListener("resize",resize);addEventListener("keydown",e=>{const keys=["black","white","gray","red","green","blue","bars"];const i=keys.indexOf(current);if(e.key==="ArrowRight")draw(keys[(i+1)%keys.length]);if(e.key==="ArrowLeft")draw(keys[(i+keys.length-1)%keys.length]);});
-resize();
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h);}
+function draw(type){current=type;const w=canvas.width,h=canvas.height;rect(0,0,w,h,"#000");label.textContent=names[type]||type.toUpperCase();
+ if(type==="black"){}
+ if(type==="gray50")rect(0,0,w,h,"#808080");
+ if(type==="pluge"){rect(0,0,w,h,"#101010");const bw=w*.13,bh=h*.34,y=h*.33;rect(w*.5-bw*1.5,y,bw,bh,"#000");rect(w*.5-bw*.5,y,bw,bh,"#101010");rect(w*.5+bw*.5,y,bw,bh,"#202020");}
+ if(type==="graysteps"){const n=11;for(let i=0;i<n;i++){const v=Math.round(i*255/(n-1));rect(i*w/n,0,w/n+1,h,"rgb("+v+","+v+","+v+")");}}
+ if(type==="whiteclip"){rect(0,0,w,h,"#eeeeee");[235,240,245,250,255].forEach((v,i)=>{const bw=w*.12,x=w*.1+i*w*.16;rect(x,h*.3,bw,h*.4,"rgb("+v+","+v+","+v+")");});}
+ if(type==="rgb"){rect(0,0,w/3,h,"#ff0000");rect(w/3,0,w/3,h,"#00ff00");rect(2*w/3,0,w/3,h,"#0000ff");}
+ if(type==="bars"){const bars=["#ffffff","#ffff00","#00ffff","#00ff00","#ff00ff","#ff0000","#0000ff"];bars.forEach((c,i)=>rect(i*w/7,0,w/7+1,h,c));}
+}
+document.querySelectorAll("[data-pattern]").forEach(b=>b.addEventListener("click",()=>draw(b.dataset.pattern)));
+addEventListener("resize",resize);addEventListener("keydown",e=>{const keys=Object.keys(names),i=keys.indexOf(current);if(e.key==="ArrowRight")draw(keys[(i+1)%keys.length]);if(e.key==="ArrowLeft")draw(keys[(i+keys.length-1)%keys.length]);if(e.key===" "){document.querySelector(".pattern-controls").classList.toggle("controls-hidden");}});
+const initial=new URLSearchParams(location.search).get("pattern");resize();if(initial&&names[initial])draw(initial);
 </script></body></html>
