@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import UIKit
 
 struct CameraScreen: View {
     @StateObject private var camera = CameraController()
@@ -37,7 +38,7 @@ struct CameraScreen: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack { Text("ISO"); Spacer(); Text("\(Int(isoValue))") }
                         Slider(value: $isoValue, in: Double(camera.minISO)...max(Double(camera.maxISO), Double(camera.minISO) + 1), step: 1)
-                            .onChange(of: isoValue) { _, value in camera.setExposure(iso: Float(value), duration: shutterValue) }
+                            .onChange(of: isoValue) { value in camera.setExposure(iso: Float(value), duration: shutterValue) }
                     }
                     .padding()
                     .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
@@ -125,7 +126,6 @@ struct CameraScreen: View {
     }
 }
 
-@MainActor
 final class CameraController: NSObject, ObservableObject {
     let session = AVCaptureSession()
     @Published var status = "Inicjalizacja kamery…"
@@ -155,8 +155,9 @@ final class CameraController: NSObject, ObservableObject {
         }
         device = camera
         try? camera.lockForConfiguration()
-        minISO = camera.activeFormat.minISO
-        maxISO = camera.activeFormat.maxISO
+        let lowISO = camera.activeFormat.minISO
+        let highISO = camera.activeFormat.maxISO
+        DispatchQueue.main.async { self.minISO = lowISO; self.maxISO = highISO }
         camera.unlockForConfiguration()
         session.addInput(input)
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -234,11 +235,9 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
         let rr = r / max(count, 1), gg = g / max(count, 1), bb = b / max(count, 1)
         let yy = 0.2126 * rr + 0.7152 * gg + 0.0722 * bb
-        Task { @MainActor in
-            self.lock.lock()
-            self.latestRGB = (rr, gg, bb, yy)
-            self.lock.unlock()
-        }
+        self.lock.lock()
+        self.latestRGB = (rr, gg, bb, yy)
+        self.lock.unlock()
     }
 }
 
