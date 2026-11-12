@@ -34,15 +34,18 @@ private struct Reading: Identifiable {
     let luma: Double
     let spread: Double
     let clipping: Double
+    let temporalVariation: Double
+    let sampleCount: Int
     var csv: String {
-        String(format: "%@,%@,%.4f,%.4f,%.4f,%.5f,%.5f,%.5f",
-               ISO8601DateFormatter().string(from: date), pattern, red, green, blue, luma, spread, clipping)
+        String(format: "%@,%@,%.4f,%.4f,%.4f,%.5f,%.5f,%.5f,%.5f,%d",
+               ISO8601DateFormatter().string(from: date), pattern, red, green, blue, luma, spread, clipping, temporalVariation, sampleCount)
     }
 }
 
 struct CameraScreen: View {
     @StateObject private var camera = CameraController()
     @State private var selectedPattern: TVPattern = .gray
+    @State private var isCapturing = false
     @State private var isoValue: Double = 100
     @State private var shutterValue: Double = 1.0 / 60.0
     @State private var focusLocked = false
@@ -113,6 +116,7 @@ struct CameraScreen: View {
                         Picker("Wzorzec", selection: $selectedPattern) {
                             ForEach(TVPattern.allCases) { p in Text(p.rawValue).tag(p) }
                         }.pickerStyle(.menu).tint(.cyan)
+                        .onChange(of: selectedPattern) { _ in camera.resetSampleBuffer() }
                         Text(selectedPattern.instruction).font(.subheadline).foregroundStyle(.secondary)
                         Text("Pamiętaj: ten wybór opisuje pomiar. Planszę wyświetlasz na TV przez odtwarzacz wzorców PWA.")
                             .font(.caption).foregroundStyle(.orange)
@@ -146,14 +150,16 @@ struct CameraScreen: View {
                             .buttonStyle(.bordered).tint(wbLocked ? .green : .cyan)
                     }
                     Button {
+                        isCapturing = true
                         camera.captureMeasurement { sample in
-                            readings.insert(Reading(date: Date(), pattern: selectedPattern.rawValue, red: sample.r, green: sample.g, blue: sample.b, luma: sample.luma, spread: sample.spread, clipping: sample.clipping), at: 0)
+                            readings.insert(Reading(date: Date(), pattern: selectedPattern.rawValue, red: sample.r, green: sample.g, blue: sample.b, luma: sample.luma, spread: sample.spread, clipping: sample.clipping, temporalVariation: sample.temporalVariation, sampleCount: Int(sample.sampleCount)), at: 0)
+                            isCapturing = false
                             activeTab = 2
                         }
                     } label: {
-                        Label("ZAPISZ POMIAR", systemImage: "scope")
+                        Label(isCapturing ? "STABILIZUJĘ OBRAZ…" : "ZAPISZ POMIAR", systemImage: "scope")
                             .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 9)
-                    }.buttonStyle(.borderedProminent).disabled(!camera.hasReading)
+                    }.buttonStyle(.borderedProminent).disabled(!camera.hasReading || isCapturing)
                     Text("Wykonaj co najmniej 5 odczytów tego samego wzorca bez zmiany ustawień. Dopiero wtedy ocenimy stabilność.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding()
@@ -189,7 +195,7 @@ struct CameraScreen: View {
                                         Text(r.date.formatted(date: .omitted, time: .standard)).font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(String(format: "R %.2f  G %.2f  B %.2f  ·  clip %.1f%%", r.red, r.green, r.blue, r.clipping * 100))
+                                    Text(String(format: "R %.2f  G %.2f  B %.2f  ·  clip %.1f%% · CV %.2f%%", r.red, r.green, r.blue, r.clipping * 100, r.temporalVariation * 100))
                                         .font(.system(.caption2, design: .monospaced))
                                 }.padding(10).background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                             }
@@ -294,7 +300,9 @@ struct CameraScreen: View {
         return Reading(date: Date(), pattern: "Średnia", red: readings.map(\.red).reduce(0,+)/n,
                        green: readings.map(\.green).reduce(0,+)/n, blue: readings.map(\.blue).reduce(0,+)/n,
                        luma: readings.map(\.luma).reduce(0,+)/n, spread: readings.map(\.spread).reduce(0,+)/n,
-                       clipping: readings.map(\.clipping).reduce(0,+)/n)
+                       clipping: readings.map(\.clipping).reduce(0,+)/n,
+                       temporalVariation: readings.map(\.temporalVariation).reduce(0,+)/n,
+                       sampleCount: readings.map(\.sampleCount).reduce(0,+)/n)
     }
 
     private func metric(_ title: String, _ value: Double) -> some View {
@@ -330,7 +338,7 @@ struct CameraScreen: View {
     }
 
     private func exportReadings() {
-        let header = "timestamp,pattern,red,green,blue,linear_luma,luma_stddev,clipped_pixel_fraction"
+        let header = "timestamp,pattern,red,green,blue,linear_luma,spatial_luma_stddev,clipped_pixel_fraction,temporal_luma_cv,sample_count"
         let csv = ([header] + readings.reversed().map(\.csv)).joined(separator: "\n")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("tv-calibrator-session.csv")
         do {
@@ -346,6 +354,8 @@ private final class CameraController: NSObject, ObservableObject {
         var r = 0.0; var g = 0.0; var b = 0.0; var luma = 0.0; var spread = 0.0
         var clipping = 0.0
         var pixelCount = 0.0
+        var temporalVariation = 0.0
+        var sampleCount = 0.0
     }
     let session = AVCaptureSession()
     @Published var status = "Oczekiwanie na kamerę"
@@ -443,22 +453,34 @@ private final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    func resetSampleBuffer() {
+        lock.lock(); recentSamples.removeAll(keepingCapacity: true); lock.unlock()
+        setStatus("Bufor wyczyszczony — czekam na stabilny obraz")
+    }
+
     func captureMeasurement(completion: @escaping (Sample) -> Void) {
-        lock.lock()
-        let samples = Array(recentSamples.suffix(5))
-        let fallback = latest
-        lock.unlock()
-        guard !samples.isEmpty else { DispatchQueue.main.async { completion(fallback) }; return }
-        func median(_ values: [Double]) -> Double {
-            let sorted = values.sorted()
-            return sorted[sorted.count / 2]
+        // Wait for the camera pipeline to settle after a pattern change.
+        queue.asyncAfter(deadline: .now() + 1.0) {
+            self.lock.lock()
+            let samples = Array(self.recentSamples.suffix(5))
+            let fallback = self.latest
+            self.lock.unlock()
+            guard !samples.isEmpty else { DispatchQueue.main.async { completion(fallback) }; return }
+            func median(_ values: [Double]) -> Double {
+                let sorted = values.sorted()
+                return sorted[sorted.count / 2]
+            }
+            let meanLuma = samples.map(\.luma).reduce(0,+) / Double(samples.count)
+            let variance = samples.map { pow($0.luma - meanLuma, 2) }.reduce(0,+) / Double(samples.count)
+            let cv = meanLuma > 0.0001 ? sqrt(variance) / meanLuma : 0
+            let result = Sample(
+                r: median(samples.map(\.r)), g: median(samples.map(\.g)), b: median(samples.map(\.b)),
+                luma: median(samples.map(\.luma)), spread: median(samples.map(\.spread)),
+                clipping: median(samples.map(\.clipping)), pixelCount: median(samples.map(\.pixelCount)),
+                temporalVariation: cv, sampleCount: Double(samples.count)
+            )
+            DispatchQueue.main.async { completion(result) }
         }
-        let result = Sample(
-            r: median(samples.map(\.r)), g: median(samples.map(\.g)), b: median(samples.map(\.b)),
-            luma: median(samples.map(\.luma)), spread: median(samples.map(\.spread)),
-            clipping: median(samples.map(\.clipping)), pixelCount: median(samples.map(\.pixelCount))
-        )
-        DispatchQueue.main.async { completion(result) }
     }
 
     func accept(_ sample: Sample) {
