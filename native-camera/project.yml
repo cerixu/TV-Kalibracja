@@ -1,0 +1,26 @@
+name: TVCalibratorCamera
+options:
+  bundleIdPrefix: pl.cerixu.tvcalibrator
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    PRODUCT_BUNDLE_IDENTIFIER: pl.cerixu.tvcalibrator.camera
+    INFOPLIST_KEY_CFBundleDisplayName: "TV Calibrator"
+    INFOPLIST_KEY_NSCameraUsageDescription: "Kamera mierzy wzorce wyświetlane na telewizorze."
+    INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  TVCalibratorCamera:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_NAME: "TV Calibrator"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_ALLOWED: NO
