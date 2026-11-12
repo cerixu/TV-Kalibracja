@@ -179,12 +179,13 @@ struct CameraScreen: View {
                             Text("Przejdź do zakładki Pomiar i zapisz pierwszy odczyt.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         }.frame(maxWidth: .infinity).padding(.vertical, 48)
                     } else {
-                        let avg = averageReading
-                        HStack(spacing: 10) {
+                        let latest = readings[0]
+                        let patternCount = Set(readings.map(\.pattern)).count
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                             resultTile("POMIARY", "\(readings.count)")
-                            resultTile("ŚREDNIA Y", String(format: "%.3f", avg.luma))
-                            resultTile("ROZPIĘTOŚĆ", String(format: "%.3f", avg.spread))
-                            resultTile("CLIPPING", String(format: "%.1f%%", avg.clipping * 100))
+                            resultTile("RÓŻNE WZORCE", "\(patternCount)")
+                            resultTile("CV OSTATNIEGO", String(format: "%.2f%%", latest.temporalVariation * 100))
+                            resultTile("CLIPPING OSTATNIEGO", String(format: "%.1f%%", latest.clipping * 100))
                         }
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Ostatnie odczyty").font(.headline)
@@ -273,12 +274,12 @@ struct CameraScreen: View {
     private var liveMetrics: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Odczyt na żywo · centralny obszar").font(.headline)
-            HStack {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 metric("R", camera.live.r)
                 metric("G", camera.live.g)
                 metric("B", camera.live.b)
                 metric("Y linear", camera.live.luma)
-                metric("Clip", camera.live.clipping * 100)
+                metric("Clip %", camera.live.clipping * 100)
             }
             HStack {
                 Text("Rozrzut w obszarze")
@@ -293,16 +294,6 @@ struct CameraScreen: View {
     private var disclaimer: some View {
         Text("Uwaga: iPhone nie jest kolorymetrem. Automatyczne przetwarzanie obrazu, odbicia, kąt i charakterystyka sensora ograniczają dokładność. Aplikacja nie będzie wymyślać wartości balansu bieli, gammy ani jasności w nitach. Do certyfikowanej kalibracji potrzebna jest sonda.")
             .font(.caption).foregroundStyle(.secondary)
-    }
-
-    private var averageReading: Reading {
-        let n = Double(readings.count)
-        return Reading(date: Date(), pattern: "Średnia", red: readings.map(\.red).reduce(0,+)/n,
-                       green: readings.map(\.green).reduce(0,+)/n, blue: readings.map(\.blue).reduce(0,+)/n,
-                       luma: readings.map(\.luma).reduce(0,+)/n, spread: readings.map(\.spread).reduce(0,+)/n,
-                       clipping: readings.map(\.clipping).reduce(0,+)/n,
-                       temporalVariation: readings.map(\.temporalVariation).reduce(0,+)/n,
-                       sampleCount: Int((readings.map { Double($0.sampleCount) }.reduce(0,+)/n).rounded()))
     }
 
     private func metric(_ title: String, _ value: Double) -> some View {
