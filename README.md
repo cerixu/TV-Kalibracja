@@ -47,7 +47,9 @@ The first milestone is repeatability: determine whether repeated readings under 
 
 The native iOS app now samples the rear camera's central screen region using AVFoundation:
 - Manual ISO and shutter controls, plus focus and white-balance locks.
-- Five most recent camera frames are combined with a per-channel median to reduce frame noise.
+- Five most recent camera frames are combined with a per-channel median to reduce frame noise; a one-second settling window follows a pattern change.
+- A temporal coefficient of variation (CV) reports frame-to-frame luma stability for the captured five-frame set.
+- Reports keep different pattern types separate; the dashboard does not average black, gray and white patterns into a meaningless single brightness value.
 - RGB remains camera-processed and device-relative.
 - Luma is calculated after sRGB transfer-function linearization (still not a calibrated luminance measurement).
 - Reports include the fraction of sampled pixels near black/white code-value endpoints and spatial luma standard deviation.
@@ -59,7 +61,8 @@ The native iOS app now samples the rear camera's central screen region using AVF
 3. Put the phone perpendicular to the screen; keep distance, zoom and framing fixed.
 4. Lock focus and white balance. Set manual ISO/shutter once, then do not change them within a comparison series.
 5. Capture the same neutral-gray pattern at least five times. Compare the spread of readings before trusting any relative trend.
-6. Repeat the series after a single TV setting change. Never change several controls at once.
+6. Check the temporal CV: below 1% is a useful repeatability sign, 1–3% means repeat the capture, and above 3% means the setup is unstable. These are provisional engineering flags, not display-calibration tolerances.
+7. Repeat the series after a single TV setting change. Never change several controls at once.
 
 Important: the PWA pattern page opened in the Samsung TV browser tests that TV-browser path, not the PS5 HDMI input. For PS5-specific results, the test pattern must be delivered through the PS5 HDMI path. The PS5 HDR calibration screens are a separate workflow. Do not mix measurements from different sources or picture modes.
 
