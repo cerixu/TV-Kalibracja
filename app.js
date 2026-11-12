@@ -1,5 +1,7 @@
 const $=s=>document.querySelector(s);
-const video=$("#camera"),startBtn=$("#camera-start"),stopBtn=$("#camera-stop"),captureBtn=$("#capture");
+const video=$("#camera"),startBtn=$("#camera-start"),stopBtn=$("#camera-stop"),captureBtn=$("#capture"),patternSelect=$("#pattern-select");
+const patternLabels={gray50:"Szarość 50%",black:"Czerń",pluge:"Czerń PLUGE",graysteps:"Skala szarości",whiteclip:"Biel / clipping",rgb:"Podstawowe RGB",bars:"Paski kolorów"};
+patternSelect.addEventListener("change",()=>{$("#pattern-name").textContent=patternLabels[patternSelect.value]||patternSelect.value;});
 let stream=null,dbPromise=null,lastMeasurements=[];
 const DB_NAME="tv-kalibracja",DB_VERSION=2;
 function openDB(){if(dbPromise)return dbPromise;dbPromise=new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains("sessions"))db.createObjectStore("sessions",{keyPath:"id"});if(!db.objectStoreNames.contains("measurements")){const store=db.createObjectStore("measurements",{keyPath:"id"});store.createIndex("createdAt","createdAt");}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});return dbPromise;}
